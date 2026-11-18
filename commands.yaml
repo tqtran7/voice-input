@@ -1,0 +1,106 @@
+# Voice -> input mappings. Edit here or in the web UI (python voice_control.py).
+#
+# global:    commands that work in every window
+# profiles:  commands that only work while a matching window is in front.
+#            match is one of  {title_contains: "..."}  {process: game.exe}  {title_regex: "..."}
+#            The first matching profile wins; on a phrase clash it beats global.
+#
+# input_mode: keyboard | controller   which input each command sends (toggle in the UI)
+#   A command is either one action, used in both modes, or one input per mode
+#   (leave a mode out and the command does nothing in it):
+#     jump: {keyboard: {tap: space}, controller: {pad_tap: a}}
+#
+# Actions:
+#   tap: <key>                 press + release (optional  duration: seconds to hold)
+#   hold: <key>                press and keep held until released
+#   release: <key>             release a held key
+#   release_all: true          release everything currently held
+#   click: left|right|middle   mouse click
+#   sequence: [ ...steps ]     run steps in order; a step can be any action or {wait: seconds}
+#   listen: true|false         pause / resume voice control (always honored)
+#
+# Xbox controller actions (virtual pad; needs  pip install vgamepad  + the ViGEmBus driver):
+#   pad_tap: <button>          press + release (optional  duration: seconds, default 0.05)
+#   pad_hold: <button>         press and keep held
+#   pad_release: <button>      release a held button
+#   stick: left|right, dir: <direction>   push a stick (optional  amount: 0-1,
+#                              duration: seconds; without duration it stays until dir: center)
+#   Buttons: a b x y lb rb lt rt back start guide ls rs dpad_up dpad_down dpad_left dpad_right
+#   Directions: up down left right up_left up_right down_left down_right center
+#
+# Key names follow pydirectinput: a-z, 0-9, space, shift, ctrl, alt, tab, enter,
+# esc, f1-f12, up, down, left, right, etc.
+
+model: vosk-model-small-en-us-0.15
+fire_on_partial: true
+block_ms: 50
+input_mode: controller
+global:
+  voice off: {listen: false}
+  voice on: {listen: true}
+profiles:
+- name: Aniimo
+  match: {title_contains: Aniimo}
+  commands:
+    twine:
+      keyboard: {pad_tap: lt}
+      controller: {pad_tap: lt, duration: 0.5}
+    throw: {pad_tap: lt, duration: 0.5}
+    catch: {pad_tap: rt, duration: 0.5}
+    cast:
+      keyboard: {pad_tap: lb}
+      controller: {pad_tap: lb, duration: 0.5}
+    attack:
+      keyboard: {pad_tap: rb}
+      controller: {pad_tap: rb, duration: 0.5}
+    ult:
+      sequence:
+      - {pad_hold: lb}
+      - {wait: 0.2}
+      - {pad_tap: rb}
+      - {pad_release: lb}
+    dash: {tap: shift, duration: 0.5}
+    jump: {tap: space, duration: 0.5}
+    touch: {tap: f, duration: 0.5}
+    pick up: {tap: f, duration: 0.5}
+    menu: {tap: esc, duration: 0.5}
+    map: {tap: m, duration: 0.5}
+    move: {hold: w}
+    click: {click: left}
+    stop: {release_all: true}
+    one:
+      keyboard: {pad_tap: dpad_up}
+      controller: {pad_tap: dpad_up, duration: 0.5}
+    two:
+      keyboard:
+        sequence:
+        - {pad_tap: dpad_right}
+        - {wait: 0.1}
+        - {pad_tap: rb}
+      controller:
+        sequence:
+        - {pad_tap: dpad_right}
+        - {wait: 0.5}
+        - {pad_tap: rb}
+    three:
+      keyboard:
+        sequence:
+        - {pad_tap: dpad_down}
+        - {wait: 0.1}
+        - {pad_tap: rb}
+      controller:
+        sequence:
+        - {pad_tap: dpad_down}
+        - {wait: 0.5}
+        - {pad_tap: rb}
+    four:
+      keyboard:
+        sequence:
+        - {pad_tap: dpad_left}
+        - {wait: 0.1}
+        - {pad_tap: rb}
+      controller:
+        sequence:
+        - {pad_tap: dpad_left}
+        - {wait: 0.5}
+        - {pad_tap: rb}

@@ -1,0 +1,42 @@
+# Voice -> input mappings. Phrase on the left, action on the right.
+# Keep phrases short and acoustically distinct ("jump" vs "dump" will collide).
+#
+# Actions:
+#   tap: <key>                 press + release (optional  duration: seconds to hold)
+#   hold: <key>                press and keep held until released
+#   release: <key>             release a held key
+#   release_all: true          release everything currently held
+#   click: left|right|middle   mouse click
+#   sequence: [ ...steps ]     run steps in order; a step can be any action or {wait: seconds}
+#   listen: true|false         pause / resume voice control (always honored)
+#
+# Key names follow pydirectinput: a-z, 0-9, space, shift, ctrl, alt, tab, enter,
+# esc, f1-f12, up, down, left, right, etc.
+
+model: vosk-model-small-en-us-0.15   # folder name of the unzipped Vosk model
+fire_on_partial: true                # act mid-word for lower latency (recommended)
+block_ms: 50                         # audio chunk size; smaller = snappier, more CPU
+
+commands:
+  jump:          {tap: space}
+  crouch:        {tap: ctrl}
+  reload:        {tap: r}
+  interact:      {tap: e}
+  inventory:     {tap: tab}
+  map:           {tap: m}
+  quick save:    {tap: f5}
+  quick load:    {tap: f9}
+
+  sprint:        {hold: shift}
+  walk:          {release: shift}
+  forward:       {hold: w}
+  back up:       {tap: s, duration: 0.6}
+  stop:          {release_all: true}
+
+  attack:        {click: left}
+  block:         {click: right}
+  double jump:   {sequence: [{tap: space}, {wait: 0.15}, {tap: space}]}
+  heal:          {sequence: [{tap: "4"}, {wait: 0.05}, {click: left}]}
+
+  voice off:     {listen: false}
+  voice on:      {listen: true}

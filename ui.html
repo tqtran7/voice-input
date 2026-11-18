@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice control</title>
+<style>
+:root{
+  --bg:#f6f5f2;--panel:#fff;--sub:#f1efe8;--line:#e3e1da;--line2:#c9c6bc;
+  --tx:#1f1e1c;--tx2:#5f5e5a;--tx3:#8a8880;
+  --acc:#185fa5;--acc-bg:#e6f1fb;--ok:#3b6d11;--ok-bg:#eaf3de;--warn:#854f0b;--warn-bg:#faeeda;
+  --bad:#a32d2d;--bad-bg:#fcebeb;--r:8px;
+  --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#1a1a19;--panel:#232322;--sub:#2c2c2a;--line:#363633;--line2:#4a4a46;
+  --tx:#ecebe6;--tx2:#b4b2a9;--tx3:#888780;
+  --acc:#85b7eb;--acc-bg:#0c447c;--ok:#c0dd97;--ok-bg:#27500a;--warn:#fac775;--warn-bg:#633806;
+  --bad:#f7c1c1;--bad-bg:#791f1f;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,"Segoe UI",sans-serif}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:5px 12px;cursor:pointer}
+button:hover{background:var(--sub)}
+button.primary{background:var(--tx);color:var(--panel);border-color:var(--tx)}
+button.primary:hover{opacity:.9}
+button.go{min-width:104px;font-weight:500}
+button.go.on{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+button.icon{padding:3px 8px;border-color:transparent;background:none;color:var(--tx3)}
+button.icon:hover{color:var(--tx);background:var(--sub)}
+input,select{background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);padding:5px 8px;min-width:0}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+input.err{border-color:var(--bad)}
+.app{max-width:1280px;margin:0 auto;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.top h1{font-size:16px;font-weight:600;margin:0}
+.pill{font-size:12px;padding:2px 10px;border-radius:99px;background:var(--sub);color:var(--tx2)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.win{font-size:12px;color:var(--tx2);max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.win b{color:var(--tx);font-weight:500}
+.grow{flex:1}
+.body{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:460px}
+.side{padding:12px;border-right:1px solid var(--line)}
+.lbl{font-size:11px;color:var(--tx3);margin:0 0 6px 4px;text-transform:uppercase;letter-spacing:.04em}
+.pf{display:block;width:100%;text-align:left;padding:8px 10px;border:1px solid transparent;border-radius:var(--r);background:none;margin-bottom:2px}
+.pf.sel{background:var(--sub);border-color:var(--line)}
+.pf .n{display:flex;align-items:center;gap:6px}
+.pf .d{font-size:11px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+.main{min-width:0}
+.ph{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
+.ph .name{font-size:15px;font-weight:600;flex:1;min-width:140px}
+.rule{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sub)}
+.rule .v{flex:1;min-width:160px}
+.note{font-size:12px;color:var(--tx2)}
+.note.warn{color:var(--warn)}
+.grip{border:none;background:none;padding:2px 4px;color:var(--tx3);cursor:grab;font-size:15px;line-height:1;letter-spacing:-2px}
+.grip:hover{color:var(--tx);background:var(--sub)}
+.row.dragging{opacity:.4}
+.row.drop-before{box-shadow:inset 0 2px 0 var(--acc)}
+.row.drop-after{box-shadow:inset 0 -2px 0 var(--acc)}
+.k.pad{border-radius:99px;font-family:inherit;font-weight:600}
+.menu .hint{font-size:12px;color:var(--tx2);padding:6px 8px 4px}
+.padgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
+.padgrid button{text-align:center}
+.row{display:grid;grid-template-columns:22px minmax(100px,150px) minmax(0,1fr) minmax(0,1fr) 32px;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line)}
+.row .del{grid-column:5;grid-row:1}
+.row.head{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.04em;padding-top:8px;padding-bottom:6px}
+.row.head .on{color:var(--acc)}
+.cell{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0;padding:4px 6px;border-radius:var(--r);border:1px solid transparent}
+.cell.active{background:color-mix(in srgb,var(--acc) 9%,transparent);border-color:color-mix(in srgb,var(--acc) 35%,transparent)}
+.cell:not(.active){opacity:.6}
+.cell:not(.active):hover,.cell:not(.active):focus-within{opacity:1}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden}
+.seg button{border:none;border-radius:0;padding:5px 12px;background:var(--panel)}
+.seg button.on{background:var(--tx);color:var(--panel)}
+.vals{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.k{display:inline-flex;align-items:center;justify-content:center;min-width:46px;padding:3px 10px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;font:13px var(--mono);background:var(--sub);cursor:pointer}
+.k:hover{border-color:var(--tx3)}
+.k.cap{background:var(--acc-bg);color:var(--acc);border-color:var(--acc);font-family:inherit}
+.k.empty{color:var(--tx3);font-family:inherit}
+.num{width:64px}
+.step{display:inline-flex;align-items:center;gap:4px;padding:2px 2px 2px 4px;border:1px dashed var(--line2);border-radius:var(--r)}
+.step select{padding:2px 4px;font-size:12px}
+.step .num{width:56px;padding:2px 6px}
+.add{padding:10px 12px}
+.foot{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 16px;border-top:1px solid var(--line);font-size:12px}
+.mono{font-family:var(--mono)}
+.errs{margin:0;padding:10px 12px 10px 30px;background:var(--bad-bg);color:var(--bad);font-size:13px;border-bottom:1px solid var(--line)}
+.banner{padding:10px 12px;background:var(--warn-bg);color:var(--warn);font-size:13px;border-bottom:1px solid var(--line)}
+.pick{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 4px);z-index:5;width:min(460px,80vw);max-height:320px;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.15);padding:4px}
+.menu button{display:block;width:100%;text-align:left;border:none;background:none;padding:6px 8px;border-radius:6px}
+.menu button:hover{background:var(--sub)}
+.menu .p{font-size:11px;color:var(--tx3);font-family:var(--mono)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--tx);color:var(--panel);padding:8px 14px;border-radius:var(--r);font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+@media (max-width:760px){
+  .body{grid-template-columns:1fr}.side{border-right:none;border-bottom:1px solid var(--line)}
+  .row{grid-template-columns:22px 1fr 32px}.row .del{grid-column:3}.row .cell{grid-column:1/-1}.row.head{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="card">
+  <div class="top">
+    <h1>Voice control</h1>
+    <span id="state" class="pill">Stopped</span>
+    <span id="padPill" class="pill" hidden title="The virtual Xbox controller is plugged in">Virtual pad connected</span>
+    <span class="grow"></span>
+    <span id="win" class="win"></span>
+    <span class="seg" role="group" aria-label="Input mode" title="Which column each voice command sends">
+      <button data-mode="keyboard">Keyboard</button><button data-mode="controller">Controller</button>
+    </span>
+    <button id="go" class="go">Start</button>
+  </div>
+  <div id="banner"></div>
+  <div class="body">
+    <nav class="side">
+      <div class="lbl">Profiles</div>
+      <div id="profiles"></div>
+      <button id="addProfile" style="width:100%;margin-top:8px">+ Add profile</button>
+      <p class="note" style="margin:12px 4px 0">The first profile whose window rule matches the window in front is used. Global commands work everywhere.</p>
+    </nav>
+    <section class="main">
+      <ul id="errs" class="errs" hidden></ul>
+      <div id="editor"></div>
+    </section>
+  </div>
+  <div class="foot">
+    <span id="heard" class="note">Nothing heard yet</span>
+    <span id="audioErr" class="note warn"></span>
+    <span class="grow"></span>
+    <span id="dirty" class="note">Saved</span>
+    <button id="save" class="primary">Save</button>
+  </div>
+</div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const h = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c != null) el.append(c);
+  return el;
+};
+
+// Browser KeyboardEvent.code -> pydirectinput key name
+const CODE = {Space:'space',Tab:'tab',Enter:'enter',NumpadEnter:'enter',Escape:'esc',Backspace:'backspace',
+  Delete:'delete',Insert:'insert',Home:'home',End:'end',PageUp:'pageup',PageDown:'pagedown',
+  ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',CapsLock:'capslock',NumLock:'numlock',
+  ScrollLock:'scrolllock',Pause:'pause',PrintScreen:'printscreen',ContextMenu:'apps',
+  ShiftLeft:'shift',ShiftRight:'shiftright',ControlLeft:'ctrl',ControlRight:'ctrlright',
+  AltLeft:'alt',AltRight:'altright',MetaLeft:'win',MetaRight:'winright',
+  Minus:'-',Equal:'=',BracketLeft:'[',BracketRight:']',Backslash:'\\',Semicolon:';',Quote:"'",
+  Comma:',',Period:'.',Slash:'/',Backquote:'`',
+  NumpadAdd:'add',NumpadSubtract:'subtract',NumpadMultiply:'multiply',NumpadDivide:'divide',NumpadDecimal:'decimal'};
+function keyName(e) {
+  if (CODE[e.code]) return CODE[e.code];
+  let m;
+  if ((m = e.code.match(/^Key([A-Z])$/))) return m[1].toLowerCase();
+  if ((m = e.code.match(/^Digit([0-9])$/))) return m[1];
+  if ((m = e.code.match(/^F([0-9]{1,2})$/)) && +m[1] <= 12) return 'f' + m[1];
+  return null;
+}
+const MOUSE = ['left', 'middle', 'right'];
+const TYPE_GROUPS = [
+  ['Keyboard and mouse', [['tap','Tap key'],['hold','Hold key'],['release','Release key'],['click','Mouse click']]],
+  ['Xbox controller', [['pad_tap','Tap button'],['pad_hold','Hold button'],['pad_release','Release button'],['stick','Move stick']]],
+  ['Other', [['sequence','Sequence'],['release_all','Release all'],['listen','Voice on/off']]]];
+const TYPES = TYPE_GROUPS.flatMap(([, t]) => t);
+const STEP_TYPES = [['tap','tap'],['hold','hold'],['release','release'],['click','click'],
+  ['pad_tap','pad tap'],['pad_hold','pad hold'],['pad_release','pad release'],['stick','stick'],['wait','wait']];
+const PAD_TYPES = ['pad_tap', 'pad_hold', 'pad_release'];
+// Xbox buttons, in the browser's "standard" gamepad order (index = Gamepad API button index)
+const PAD_STD = ['a','b','x','y','lb','rb','lt','rt','back','start','ls','rs','dpad_up','dpad_down','dpad_left','dpad_right','guide'];
+const PAD_LABEL = {a:'A',b:'B',x:'X',y:'Y',lb:'LB',rb:'RB',lt:'LT',rt:'RT',back:'View',start:'Menu',guide:'Guide',
+  ls:'LS click',rs:'RS click',dpad_up:'D-pad ↑',dpad_down:'D-pad ↓',dpad_left:'D-pad ←',dpad_right:'D-pad →'};
+const PAD_ORDER = ['a','b','x','y','lb','rb','lt','rt','dpad_up','dpad_down','dpad_left','dpad_right','back','start','ls','rs','guide'];
+const DIRS = [['up','↑ up'],['down','↓ down'],['left','← left'],['right','→ right'],['up_left','↖ up-left'],
+  ['up_right','↗ up-right'],['down_left','↙ down-left'],['down_right','↘ down-right'],['center','• center (let go)']];
+const RULES = [['title_contains','Window title contains'],['process','Process name is'],['title_regex','Title matches regex']];
+
+let cfg = null, keys = new Set(), sel = -1, dirty = false, status = {}, capture = null;
+
+// ---------------------------------------------------------------- data
+
+const COLS = ['keyboard', 'controller'];
+const toList = cmds => Object.entries(cmds || {}).map(([phrase, b]) => ({phrase, keyboard: b.keyboard ?? null, controller: b.controller ?? null}));
+const toMap = list => Object.fromEntries(list.map(c => [c.phrase.trim().toLowerCase().replace(/\s+/g, ' '), {keyboard: c.keyboard, controller: c.controller}]));
+const newCommand = () => ({phrase: '', keyboard: cfg.input_mode === 'keyboard' ? {tap: ''} : null,
+  controller: cfg.input_mode === 'controller' ? {pad_tap: ''} : null});
+const current = () => sel < 0 ? cfg.global : cfg.profiles[sel].commands;
+const typeOf = a => (TYPES.find(([t]) => t in a) || ['tap'])[0];
+const stepType = s => (STEP_TYPES.find(([t]) => t in s) || ['tap'])[0];
+
+async function load() {
+  const r = await fetch('/api/config');
+  const data = await r.json();
+  keys = new Set(data.keys);
+  cfg = {
+    model: data.model, fire_on_partial: data.fire_on_partial, block_ms: data.block_ms,
+    input_mode: data.input_mode, migrated: data.migrated,
+    global: toList(data.global),
+    profiles: data.profiles.map(p => ({name: p.name, match: {...p.match}, commands: toList(p.commands)})),
+  };
+  sel = cfg.profiles.length ? 0 : -1;
+  setDirty(!!cfg.migrated);
+  render();
+}
+
+function setDirty(d) {
+  dirty = d;
+  const el = $('#dirty');
+  el.textContent = d ? 'Unsaved changes' : 'Saved to commands.yaml';
+  el.className = 'note' + (d ? ' warn' : '');
+}
+const changed = () => { setDirty(true); renderSide(); renderBanner(); };
+
+async function save() {
+  const body = {
+    model: cfg.model, fire_on_partial: cfg.fire_on_partial, block_ms: cfg.block_ms,
+    input_mode: cfg.input_mode,
+    global: toMap(cfg.global),
+    profiles: cfg.profiles.map(p => ({name: p.name.trim(), match: p.match, commands: toMap(p.commands)})),
+  };
+  const r = await fetch('/api/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const res = await r.json();
+  const errs = $('#errs');
+  errs.replaceChildren(...(res.errors || []).map(e => h('li', {}, e)));
+  errs.hidden = !res.errors;
+  if (r.ok) { cfg.migrated = false; setDirty(false); renderBanner(); toast('Saved'); }
+  else toast("Couldn't save. Fix the problems listed above.");
+}
+
+// ---------------------------------------------------------------- key capture
+
+function startCapture(el, mode, set) {
+  cancelCapture();
+  capture = {el, mode, set, old: el.textContent};
+  el.classList.add('cap');
+  el.textContent = {mouse: 'click a mouse button…', pad: 'press a controller button…'}[mode] || 'press a key…';
+  if (mode === 'pad') {
+    capture.menu = h('div', {class: 'menu padmenu'},
+      h('div', {class: 'hint'}, 'Press a button on your controller, or pick one. Esc cancels.'),
+      h('div', {class: 'padgrid'}, PAD_ORDER.map(b => h('button', {onclick: () => finishCapture(b)}, PAD_LABEL[b]))));
+    el.parentElement.append(capture.menu);
+    capture.base = pressedPadButtons();  // ignore buttons already held down
+    requestAnimationFrame(pollPad);
+  }
+}
+function pressedPadButtons() {
+  const on = new Set();
+  for (const p of navigator.getGamepads ? navigator.getGamepads() : []) {
+    if (p) p.buttons.forEach((b, i) => { if (b.pressed || b.value > 0.5) on.add(p.index + ':' + i); });
+  }
+  return on;
+}
+function pollPad() {
+  if (!capture || capture.mode !== 'pad') return;
+  const now = pressedPadButtons();
+  for (const k of capture.base) if (!now.has(k)) capture.base.delete(k);  // released: may count next time
+  for (const k of now) {
+    const name = PAD_STD[+k.split(':')[1]];
+    if (!capture.base.has(k) && name) return finishCapture(name);
+  }
+  requestAnimationFrame(pollPad);
+}
+function cancelCapture() {
+  if (!capture) return;
+  capture.menu?.remove();
+  capture.el.classList.remove('cap');
+  capture.el.textContent = capture.old;
+  capture = null;
+}
+let ctxUntil = 0;  // swallow the context menu that follows a captured right click
+function finishCapture(name) {
+  const c = capture; capture = null;
+  c.menu?.remove();
+  if (c.mode === 'mouse') ctxUntil = Date.now() + 800;
+  c.set(name);
+  changed();
+  renderMain();
+}
+document.addEventListener('keydown', e => {
+  if (!capture) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
+    return;
+  }
+  e.preventDefault(); e.stopPropagation();
+  if (capture.mode !== 'key') { if (e.code === 'Escape') cancelCapture(); return; }
+  const name = keyName(e);
+  if (!name || !keys.has(name)) { toast(`${e.code || e.key} isn't supported. Try another key.`); return; }
+  finishCapture(name);
+}, true);
+document.addEventListener('mousedown', e => {
+  if (!capture) return;
+  if (capture.mode === 'mouse') { e.preventDefault(); e.stopPropagation(); finishCapture(MOUSE[e.button] || 'left'); }
+  else if (e.target !== capture.el && !e.target.closest('.padmenu')) cancelCapture();
+}, true);
+document.addEventListener('contextmenu', e => { if (capture || Date.now() < ctxUntil) e.preventDefault(); }, true);
+
+function keyChip(get, set) {
+  const v = get();
+  return h('button', {class: 'k' + (v ? '' : ' empty'), title: 'Click, then press the new key',
+    onclick: e => startCapture(e.currentTarget, 'key', set)}, v || 'set key');
+}
+function mouseChip(get, set) {
+  const v = get();
+  return h('button', {class: 'k', 'data-mouse': '1', title: 'Click, then click the mouse button to use',
+    onclick: e => startCapture(e.currentTarget, 'mouse', set)}, (v || 'left') + ' click');
+}
+function padChip(get, set) {
+  const v = get();
+  return h('span', {class: 'pick'}, h('button', {class: 'k pad' + (v ? '' : ' empty'),
+    title: 'Click, then press the button on your controller',
+    onclick: e => { if (!capture || capture.el !== e.currentTarget) startCapture(e.currentTarget, 'pad', set); }},
+    PAD_LABEL[v] || 'set button'));
+}
+function stickEditor(s) {
+  const out = [
+    h('select', {'aria-label': 'Stick', onchange: e => { s.stick = e.target.value; changed(); }},
+      ['left', 'right'].map(v => h('option', {value: v, selected: s.stick === v || undefined}, v + ' stick'))),
+    h('select', {'aria-label': 'Direction', onchange: e => { s.dir = e.target.value;
+      if (s.dir === 'center') { delete s.amount; delete s.duration; } changed(); renderMain(); }},
+      DIRS.map(([v, l]) => h('option', {value: v, selected: (s.dir || 'center') === v || undefined}, l)))];
+  if (s.dir && s.dir !== 'center') out.push(
+    h('span', {class: 'note'}, 'strength'),
+    numInput(s.amount, '1', v => { if (v === undefined) delete s.amount; else s.amount = Math.min(1, v); }, 'How far to push, 0 to 1'),
+    h('span', {class: 'note'}, 'for'),
+    numInput(s.duration, 'hold', v => { if (v === undefined) delete s.duration; else s.duration = v; },
+      'Seconds to push. Leave empty to keep it pushed until a "center" command or Stop'),
+    h('span', {class: 'note'}, 's'));
+  return out;
+}
+function numInput(value, placeholder, set, title) {
+  return h('input', {class: 'num', type: 'number', min: 0, step: 0.01, value: value ?? '', placeholder, title,
+    oninput: e => { const n = e.target.value === '' ? undefined : +e.target.value; set(n); changed(); }});
+}
+
+// ---------------------------------------------------------------- render
+
+function render() { renderBanner(); renderSide(); renderMain(); }
+
+function usesPad() {
+  const pad = a => a && (PAD_TYPES.some(t => t in a) || 'stick' in a || (a.sequence || []).some(pad));
+  return [cfg.global, ...cfg.profiles.map(p => p.commands)].some(l => l.some(c => pad(c.controller)));
+}
+function renderBanner() {
+  const parts = [];
+  if (cfg.migrated) parts.push(h('div', {class: 'banner'},
+    'Your commands.yaml was in the old single-list format. Voice on/off moved to Global and everything else is in "My game". ' +
+    'Set a window for it, then save. The original file will be kept as commands.yaml.bak.'));
+  if (status.pad_available === false && usesPad()) parts.push(h('div', {class: 'banner'},
+    'Controller actions need the virtual pad driver. In a terminal run ', h('span', {class: 'mono'}, 'pip install vgamepad'),
+    ', accept the ViGEmBus installer, then restart voice_control.py. Keyboard commands keep working meanwhile.'));
+  $('#banner').replaceChildren(...parts);
+}
+
+function ruleText(m) {
+  if (!m.value) return 'No window set';
+  return {title_contains: 'Title has ', process: '', title_regex: 'Regex '}[m.type] + m.value;
+}
+
+function renderSide() {
+  const items = [{i: -1, name: 'Global', d: `Every window · ${cfg.global.length} cmds`}]
+    .concat(cfg.profiles.map((p, i) => ({i, name: p.name || 'Untitled', d: `${ruleText(p.match)} · ${p.commands.length} cmds`})));
+  $('#profiles').replaceChildren(...items.map(it => {
+    const active = it.i >= 0 && status.profile === cfg.profiles[it.i].name && cfg.profiles[it.i].name;
+    return h('button', {class: 'pf' + (it.i === sel ? ' sel' : ''), onclick: () => { sel = it.i; cancelCapture(); render(); }},
+      h('div', {class: 'n'}, it.name, active ? h('span', {class: 'dot', title: 'Active now'}) : null),
+      h('div', {class: 'd'}, it.d));
+  }));
+}
+
+function renderMain() {
+  const ed = $('#editor');
+  const list = current();
+  const parts = [];
+
+  if (sel < 0) {
+    parts.push(h('div', {class: 'ph'}, h('span', {class: 'name'}, 'Global')),
+      h('div', {class: 'rule'}, h('span', {class: 'note'}, 'Active in every window. Keep this to voice on/off and other harmless commands.')));
+  } else {
+    const p = cfg.profiles[sel];
+    const nameIn = h('input', {class: 'name', value: p.name, 'aria-label': 'Profile name',
+      oninput: e => { p.name = e.target.value; changed(); }});
+    parts.push(h('div', {class: 'ph'}, nameIn,
+      h('button', {class: 'icon', title: 'Move up (checked earlier)', disabled: sel === 0 || undefined, onclick: () => move(-1)}, '↑'),
+      h('button', {class: 'icon', title: 'Move down', disabled: sel === cfg.profiles.length - 1 || undefined, onclick: () => move(1)}, '↓'),
+      h('button', {class: 'icon', title: 'Delete profile', onclick: delProfile}, 'Delete')));
+
+    const valIn = h('input', {class: 'v', value: p.match.value,
+      placeholder: {title_contains: 'ELDEN RING', process: 'eldenring.exe', title_regex: '^Elden Ring'}[p.match.type],
+      oninput: e => { p.match.value = e.target.value; changed(); }});
+    const typeSel = h('select', {'aria-label': 'Window rule', onchange: e => { p.match.type = e.target.value; changed(); renderMain(); }},
+      RULES.map(([v, l]) => h('option', {value: v, selected: v === p.match.type || undefined}, l)));
+    parts.push(h('div', {class: 'rule'}, typeSel, valIn, windowPicker(p)));
+    if (!p.match.value) parts.push(h('div', {class: 'banner'}, "This profile has no window rule, so it's never active. Pick a window."));
+  }
+
+  const colHead = (col, label) => h('span', {class: cfg.input_mode === col ? 'on' : ''},
+    label, cfg.input_mode === col ? ' · in use' : '');
+  parts.push(h('div', {class: 'row head'}, h('span'), h('span', {}, 'Phrase'),
+    colHead('keyboard', 'Keyboard and mouse'), colHead('controller', 'Xbox controller'), h('span')));
+  const seen = new Map();
+  list.forEach(c => { const k = c.phrase.trim().toLowerCase(); seen.set(k, (seen.get(k) || 0) + 1); });
+  list.forEach((c, i) => parts.push(commandRow(list, c, i, seen)));
+  parts.push(h('div', {class: 'add'}, h('button', {onclick: () => {
+    list.push(newCommand()); changed(); renderMain();
+    const ins = ed.querySelectorAll('.row input[aria-label="Phrase"]'); ins[ins.length - 1]?.focus();
+  }}, '+ Add command')));
+  ed.replaceChildren(...parts);
+}
+
+function commandRow(list, c, i, seen) {
+  const k = c.phrase.trim().toLowerCase();
+  const bad = !k || seen.get(k) > 1 || !/^[a-z' ]+$/i.test(k);
+  const phrase = h('input', {value: c.phrase, 'aria-label': 'Phrase', placeholder: 'say this', class: bad ? 'err' : '',
+    title: !k ? 'Enter a phrase' : seen.get(k) > 1 ? 'This phrase is listed twice' : bad ? 'Letters, spaces and apostrophes only' : '',
+    oninput: e => { c.phrase = e.target.value; changed(); },
+    onchange: e => { c.phrase = e.target.value.trim().toLowerCase().replace(/\s+/g, ' '); renderMain(); }});
+  const row = h('div', {class: 'row'});
+  const clearDrop = () => row.classList.remove('drop-before', 'drop-after');
+  const grip = h('button', {class: 'grip', draggable: 'true', 'aria-label': `Move "${c.phrase}"`,
+    title: 'Drag to reorder (or focus and use the up/down arrow keys)',
+    ondragstart: e => {
+      dragFrom = i; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.phrase);
+      e.dataTransfer.setDragImage(row, 12, 16); row.classList.add('dragging');
+    },
+    ondragend: () => { dragFrom = null; renderMain(); },
+    onkeydown: e => {
+      const to = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : null;
+      if (to === null) return;
+      e.preventDefault();
+      if (to < 0 || to >= list.length) return;
+      moveCmd(list, i, to);
+      $('#editor').querySelectorAll('.grip')[to]?.focus();
+    }}, '⋮⋮');
+  row.addEventListener('dragover', e => {
+    if (dragFrom === null) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+    row.classList.toggle('drop-after', after); row.classList.toggle('drop-before', !after);
+  });
+  row.addEventListener('dragleave', clearDrop);
+  row.addEventListener('drop', e => {
+    if (dragFrom === null) return;
+    e.preventDefault();
+    let to = i + (row.classList.contains('drop-after') ? 1 : 0);
+    if (dragFrom < to) to--;
+    clearDrop();
+    if (to !== dragFrom) moveCmd(list, dragFrom, to);
+  });
+  row.append(grip, phrase,
+    h('button', {class: 'icon del', title: 'Delete command', 'aria-label': 'Delete command', onclick: () => { list.splice(i, 1); changed(); renderMain(); }}, '✕'),
+    cellEditor(c, 'keyboard'), cellEditor(c, 'controller'));
+  return row;
+}
+
+const NEUTRAL = ['release_all', 'listen'];  // same meaning in both modes
+function cellEditor(c, col) {
+  const a = c[col], t = a ? typeOf(a) : 'none';
+  const own = col === 'keyboard' ? 'Keyboard and mouse' : 'Xbox controller';
+  let groups = TYPE_GROUPS.filter(([g]) => g === own || g === 'Other');
+  if (a && !groups.some(([, ts]) => ts.some(([v]) => v === t)))
+    groups = [...groups, ['Other inputs', TYPES.filter(([v]) => v === t)]];
+  const label = col === 'keyboard' ? 'Keyboard' : 'Controller';
+  const sel = h('select', {'aria-label': `${label} action`, onchange: e => {
+    const v = e.target.value;
+    c[col] = v === 'none' ? null : convert(a || {}, v, col);
+    const other = COLS.find(x => x !== col);
+    if (NEUTRAL.includes(v) && !c[other]) c[other] = JSON.parse(JSON.stringify(c[col]));  // voice off etc. in both modes
+    changed(); renderMain();
+  }},
+    h('option', {value: 'none', selected: !a || undefined}, 'Nothing'),
+    groups.map(([g, types]) => h('optgroup', {label: g},
+      types.map(([v, l]) => h('option', {value: v, selected: v === t || undefined}, l)))));
+  return h('div', {class: 'cell' + (cfg.input_mode === col ? ' active' : ''), title: `${label} mode`}, sel,
+    a ? actionEditor(a, col) : h('span', {class: 'note'}, `Silent in ${label.toLowerCase()} mode`));
+}
+
+let dragFrom = null;
+function moveCmd(list, from, to) {
+  list.splice(to, 0, list.splice(from, 1)[0]);
+  changed(); renderMain();
+}
+
+function firstKey(a) {
+  for (const t of ['tap', 'hold', 'release']) if (a[t]) return String(a[t]);
+  if (a.sequence) for (const s of a.sequence) { const k = firstKey(s); if (k) return k; }
+  return '';
+}
+function firstPad(a) {
+  for (const t of PAD_TYPES) if (a[t]) return a[t];
+  if (a.sequence) for (const s of a.sequence) { const k = firstPad(s); if (k) return k; }
+  return '';
+}
+function convert(a, t, col) {
+  const key = firstKey(a), pad = firstPad(a) || 'a';
+  switch (t) {
+    case 'pad_tap': case 'pad_hold': case 'pad_release': return {[t]: firstPad(a) || 'a'};
+    case 'stick': return a.stick ? {...a} : {stick: 'left', dir: 'up', duration: 0.5};
+    case 'tap': case 'hold': case 'release': return {[t]: key};
+    case 'click': return {click: a.click || 'left'};
+    case 'release_all': return {release_all: true};
+    case 'listen': return {listen: false};
+    case 'sequence': return {sequence: a.sequence || (col === 'controller'
+      ? [{pad_tap: pad}, {wait: 0.1}, {pad_tap: pad}] : [{tap: key}, {wait: 0.1}, {tap: key}])};
+  }
+}
+
+const STEP_COLS = {keyboard: ['tap', 'hold', 'release', 'click', 'wait'],
+  controller: ['pad_tap', 'pad_hold', 'pad_release', 'stick', 'wait']};
+const newStep = col => col === 'controller' ? {pad_tap: ''} : {tap: ''};
+
+function actionEditor(a, col) {
+  const t = typeOf(a);
+  if (t === 'tap') return [keyChip(() => a.tap, v => a.tap = v),
+    h('span', {class: 'note'}, 'held for'),
+    numInput(a.duration, '0.03', v => { if (v === undefined) delete a.duration; else a.duration = v; }, 'Seconds the key stays down'),
+    h('span', {class: 'note'}, 's')];
+  if (t === 'hold' || t === 'release') return [keyChip(() => a[t], v => a[t] = v),
+    h('span', {class: 'note'}, t === 'hold' ? 'stays down until released' : '')];
+  if (t === 'click') return [mouseChip(() => a.click, v => a.click = v)];
+  if (t === 'pad_tap') return [padChip(() => a.pad_tap, v => a.pad_tap = v),
+    h('span', {class: 'note'}, 'held for'),
+    numInput(a.duration, '0.05', v => { if (v === undefined) delete a.duration; else a.duration = v; }, 'Seconds the button stays down'),
+    h('span', {class: 'note'}, 's')];
+  if (t === 'pad_hold' || t === 'pad_release') return [padChip(() => a[t], v => a[t] = v),
+    h('span', {class: 'note'}, t === 'pad_hold' ? 'stays down until released' : '')];
+  if (t === 'stick') return stickEditor(a);
+  if (t === 'release_all') return [h('span', {class: 'note'}, 'Lets go of every held key')];
+  if (t === 'listen') return [h('select', {onchange: e => { a.listen = e.target.value === 'on'; changed(); }},
+    h('option', {value: 'off', selected: !a.listen || undefined}, 'Pause voice control'),
+    h('option', {value: 'on', selected: a.listen || undefined}, 'Resume voice control'))];
+  // sequence
+  const steps = a.sequence;
+  const out = steps.map((s, i) => {
+    const st = stepType(s);
+    const sel = h('select', {'aria-label': 'Step type', onchange: e => {
+      const nt = e.target.value, key = firstKey(s);
+      steps[i] = nt === 'wait' ? {wait: 0.1} : nt === 'click' ? {click: 'left'}
+        : nt === 'stick' ? {stick: 'left', dir: 'up', duration: 0.3}
+        : PAD_TYPES.includes(nt) ? {[nt]: firstPad(s) || 'a'} : {[nt]: key};
+      changed(); renderMain();
+    }}, STEP_TYPES.filter(([v]) => v === st || STEP_COLS[col].includes(v))
+      .map(([v, l]) => h('option', {value: v, selected: v === st || undefined}, l)));
+    const val = st === 'wait' ? [numInput(s.wait, '0.1', v => s.wait = v ?? 0, 'Seconds'), h('span', {class: 'note'}, 's')]
+      : st === 'click' ? [mouseChip(() => s.click, v => s.click = v)]
+      : st === 'stick' ? stickEditor(s)
+      : PAD_TYPES.includes(st) ? [padChip(() => s[st], v => s[st] = v)]
+      : [keyChip(() => s[st], v => s[st] = v)];
+    return h('span', {class: 'step'}, sel, val,
+      h('button', {class: 'icon', title: 'Remove step', 'aria-label': 'Remove step', onclick: () => {
+        steps.splice(i, 1); if (!steps.length) steps.push(newStep(col)); changed(); renderMain();
+      }}, '✕'));
+  });
+  out.push(h('button', {class: 'icon', title: 'Add step', onclick: () => { steps.push(newStep(col)); changed(); renderMain(); }}, '+ step'));
+  return out;
+}
+
+function windowPicker(p) {
+  const wrap = h('span', {class: 'pick'});
+  const btn = h('button', {onclick: async () => {
+    if (wrap.querySelector('.menu')) { wrap.querySelector('.menu').remove(); return; }
+    const wins = await (await fetch('/api/windows')).json();
+    const menu = h('div', {class: 'menu', role: 'menu'},
+      wins.length ? wins.map(w => h('button', {onclick: () => {
+        p.match.value = p.match.type === 'process' ? w.process
+          : p.match.type === 'title_regex' ? '^' + w.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' : w.title;
+        if (!cfg.profiles.some(q => q !== p && q.name === w.title) && /^(New profile|My game)/.test(p.name))
+          p.name = w.title.slice(0, 40);
+        menu.remove(); changed(); renderMain();
+      }}, h('div', {}, w.title), h('div', {class: 'p'}, w.process || '?'))) : h('div', {class: 'note', style: 'padding:8px'}, 'No windows found'));
+    wrap.append(menu);
+  }}, 'Pick window ▾');
+  wrap.append(btn);
+  return wrap;
+}
+document.addEventListener('click', e => { if (!e.target.closest('.pick')) document.querySelectorAll('.menu').forEach(m => m.remove()); });
+
+function move(d) {
+  const j = sel + d;
+  [cfg.profiles[sel], cfg.profiles[j]] = [cfg.profiles[j], cfg.profiles[sel]];
+  sel = j; changed(); render();
+}
+function delProfile() {
+  const p = cfg.profiles[sel];
+  if (!confirm(`Delete profile "${p.name}" and its ${p.commands.length} commands?`)) return;
+  cfg.profiles.splice(sel, 1); sel = Math.min(sel, cfg.profiles.length - 1); changed(); render();
+}
+$('#addProfile').onclick = () => {
+  let n = 'New profile', i = 2;
+  while (cfg.profiles.some(p => p.name === n)) n = `New profile ${i++}`;
+  cfg.profiles.push({name: n, match: {type: 'title_contains', value: ''}, commands: [newCommand()]});
+  sel = cfg.profiles.length - 1; changed(); render();
+};
+
+// ---------------------------------------------------------------- status
+
+let toastT;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+async function toggle() {
+  status = await (await fetch(status.running ? '/api/stop' : '/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).json();
+  showStatus();
+}
+$('#go').onclick = toggle;
+document.querySelectorAll('.seg button').forEach(b => b.onclick = async () => {
+  const r = await fetch('/api/mode', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode: b.dataset.mode})});
+  status = await r.json();
+  showStatus();
+  toast(`${b.dataset.mode === 'keyboard' ? 'Keyboard' : 'Controller'} mode`);
+});
+$('#save').onclick = save;
+
+function showStatus() {
+  const s = status, st = $('#state'), go = $('#go');
+  const paused = s.running && !s.listening;
+  st.textContent = !s.running ? 'Stopped' : paused ? 'Paused by voice' : 'Listening';
+  st.className = 'pill' + (s.running ? (paused ? ' warn' : ' ok') : '');
+  go.textContent = s.running ? 'Stop' : 'Start';
+  go.classList.toggle('on', !!s.running);
+  $('#padPill').hidden = !s.pad_connected;
+  document.querySelectorAll('.seg button').forEach(b => {
+    b.classList.toggle('on', b.dataset.mode === s.input_mode);
+    b.setAttribute('aria-pressed', b.dataset.mode === s.input_mode);
+  });
+  if (cfg && s.input_mode && cfg.input_mode !== s.input_mode) { cfg.input_mode = s.input_mode; renderMain(); }
+  const w = s.window || {};
+  $('#win').replaceChildren(w.title ? h('span', {title: `${w.title} (${w.process})`}, 'In front: ', h('b', {}, w.title),
+    ' → ', s.profile ? h('b', {}, s.profile) : 'no profile, Global only') : '');
+  $('#heard').replaceChildren(s.last_heard ? h('span', {}, 'Last heard: ', h('span', {class: 'mono'}, s.last_heard),
+    s.last_fired ? ` · fired "${s.last_fired}" in ${s.last_ms} ms` : '') : 'Nothing heard yet');
+  $('#audioErr').textContent = s.error || '';
+}
+let lastProfile, lastPadOk;
+async function poll() {
+  try {
+    status = await (await fetch('/api/status')).json();
+    showStatus();
+    if (status.profile !== lastProfile) { lastProfile = status.profile; if (cfg) renderSide(); }
+    if (status.pad_available !== lastPadOk) { lastPadOk = status.pad_available; if (cfg) renderBanner(); }
+  } catch { $('#state').textContent = 'Not connected'; $('#state').className = 'pill warn'; }
+  setTimeout(poll, 400);
+}
+window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
+
+load().then(poll);
+</script>
+</body>
+</html>
